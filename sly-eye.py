@@ -1,9 +1,14 @@
 import logging
 import coloredlogs
 import argparse
+import requests
+import feedparser
+import json
+import time
+from pathlib import Path
 
 def main(args):
-    pass
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A package scanner")
