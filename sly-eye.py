@@ -1,14 +1,14 @@
 import logging
 import coloredlogs
 import argparse
-import requests
-import feedparser
-import json
-import time
-from pathlib import Path
+
+from src.sources.dockerhub import dockerhub_source
+from src.scanning.trufflehog import run_trufflehog
 
 def main(args):
-    
+    # dockerhub_source()
+    run_trufflehog()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A package scanner")
