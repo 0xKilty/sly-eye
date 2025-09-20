@@ -4,10 +4,11 @@ import argparse
 
 from src.sources.dockerhub import dockerhub_source
 from src.scanning.trufflehog import run_trufflehog
+from src.storage.elastic import run_elastic
 
 def main(args):
     # dockerhub_source()
-    run_trufflehog()
+    run_elastic()
 
 
 if __name__ == "__main__":

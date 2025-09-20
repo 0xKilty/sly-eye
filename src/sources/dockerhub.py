@@ -1,5 +1,4 @@
 import json
-import pathlib
 import requests
 
 def decode_hub_data(pool_or_text):

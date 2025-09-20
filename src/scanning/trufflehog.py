@@ -4,19 +4,18 @@ import os
 def run_trufflehog():
     client = docker.from_env()
 
+    image = "trufflesecurity/trufflehog:latest"
+    client.images.pull(image)
+
     container = client.containers.run(
-        "trufflesecurity/trufflehog:latest",
+        image,
         [
             "github",
-            "--repo", "https://github.com/trufflesecurity/test_keys"
+            "--repo", 
+            "https://github.com/trufflesecurity/test_keys",
+            "--json"
         ],
-        volumes={
-            os.getcwd(): {  # mount current dir
-                'bind': '/pwd',
-                'mode': 'rw'
-            }
-        },
-        remove=True,   # equivalent to --rm
-        tty=True,      # equivalent to -t
-        stdin_open=True  # equivalent to -i
+        remove=True,
     )
+
+    print(container)
