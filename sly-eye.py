@@ -3,9 +3,9 @@ import coloredlogs
 import argparse
 from elasticsearch import helpers
 
-from src.sources.dockerhub import dockerhub_source
+from src.sourcing.dockerhub import dockerhub_source
 from src.scanning.trufflehog import run_trufflehog
-from src.storage.elastic import start_elastic
+from src.storing.elastic import start_elastic
 
 def main(args):
     es, _ = start_elastic()
@@ -44,4 +44,5 @@ if __name__ == "__main__":
 
     coloredlogs.install(level=level, logger=logger, fmt="%(asctime)s [%(levelname)s] %(message)s")
 
+    logger.debug("Starting sly-eye")
     main(args)
