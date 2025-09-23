@@ -1,21 +1,21 @@
 import docker
-import os
+import json
+import logging
+logger = logging.getLogger("sly-eye")
 
-def run_trufflehog():
+def run_trufflehog(image):
     client = docker.from_env()
 
-    image = "trufflesecurity/trufflehog:latest"
-    client.images.pull(image)
+    trufflehog_image = "trufflesecurity/trufflehog:latest"
+    logger.debug(f"Pulling image: {trufflehog_image}")
+    client.images.pull(trufflehog_image)
 
-    container = client.containers.run(
-        image,
-        [
-            "github",
-            "--repo", 
-            "https://github.com/trufflesecurity/test_keys",
-            "--json"
-        ],
-        remove=True,
-    )
+    logger.debug("Starting trufflehog container")
 
-    print(container)
+    params = f"docker --image {image} --json"
+    logger.debug(f"Running: trufflehog {params}")
+    container = client.containers.run(trufflehog_image, params.split(" "), remove=True)
+
+    logger.debug("Stopping trufflehog container")
+    ret =  [json.loads(line) for line in container.decode().splitlines()]
+    return ret

@@ -1,5 +1,7 @@
 import json
 import requests
+import logging
+logger = logging.getLogger("sly-eye")
 
 def decode_hub_data(pool_or_text):
     pool = pool_or_text if isinstance(pool_or_text, list) else json.loads(pool_or_text)
@@ -35,10 +37,24 @@ def decode_hub_data(pool_or_text):
         if isinstance(node, list):
             return [decode_value(x) for x in node]
         return node
-    return [decode_node(entry) for entry in pool]
+    return decode_node(pool[0])
 
 def dockerhub_source():
-    response = requests.get("https://hub.docker.com/search.data?sort=updated_at&order=desc")
+    url_parameters = [
+        "sort=updated_at",  # most recently updated
+        "order=desc",
+        "_routes=root,routes/_layout.search",
+        "type=image",  # only interested in images not extensions, plugins, etc.
+        "page_size=100"  # max page size
+    ]
+
+    url = f"https://hub.docker.com/search.data?{'&'.join(url_parameters)}"
+
+    logger.debug(f"Sending GET request to {url}")
+    response = requests.get(url)
+
     if response.status_code == 200:
         decoded_data = decode_hub_data(response.text)
-        print(decoded_data)
+        return decoded_data
+    
+    return None

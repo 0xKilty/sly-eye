@@ -1,14 +1,28 @@
 import logging
 import coloredlogs
 import argparse
+from elasticsearch import helpers
 
 from src.sources.dockerhub import dockerhub_source
 from src.scanning.trufflehog import run_trufflehog
-from src.storage.elastic import run_elastic
+from src.storage.elastic import start_elastic
 
 def main(args):
-    # dockerhub_source()
-    run_elastic()
+    es, _ = start_elastic()
+
+    recent_docker_images = dockerhub_source()
+    results = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
+    
+    for image in results:
+        trufflehog_results = run_trufflehog(image["id"])
+
+        logger.debug(f"Adding {len(trufflehog_results)} results into elastic")
+        actions = [
+            {"_index": "trufflehog-findings", "_source": result}
+            for result in trufflehog_results
+        ]
+
+        helpers.bulk(es, actions)
 
 
 if __name__ == "__main__":

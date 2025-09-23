@@ -4,7 +4,7 @@ from elasticsearch import Elasticsearch
 import logging
 logger = logging.getLogger("sly-eye")
 
-def run_elastic():
+def start_elastic():
     client = docker.from_env()
 
     image = "docker.elastic.co/elasticsearch/elasticsearch:8.15.3"
@@ -49,10 +49,9 @@ def run_elastic():
     while time.time() < deadline:
         try:
             info = es.info()
-            print("Elasticsearch is up:", info["version"]["number"])
+            logger.debug(f"Elasticsearch is up v{info['version']['number']}")
             return es, container
-        except Exception as e:
-            logger.debug(f"Failed to connect to elastic search {e}")
-            time.sleep(2)
+        except Exception:
+            time.sleep(1)
 
     raise RuntimeError("Elasticsearch did not become ready in time")
