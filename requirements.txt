@@ -1,0 +1,4 @@
+coloredlogs
+docker
+elasticsearch
+pyfiglet
