@@ -7,6 +7,25 @@ from src.sourcing.dockerhub import dockerhub_source
 from src.scanning.trufflehog import run_trufflehog
 from src.storing.elastic import start_elastic
 
+def display_logo():
+    eye = r"""
+          ..,,;;;;;;,,,,
+       .,;'';;,..,;;;,,,,,.''';;,..
+    ,,''                    '';;;;,;''
+   ;'    ,;@@;'  ,@@;, @@, ';;;@@;,;';.
+  ''  ,;@@@@@'  ;@@@@; ''    ;;@@@@@;;;;
+     ;;@@@@@;    '''     .,,;;;@@@@@@@;;;
+    ;;@@@@@@;           , ';;;@@@@@@@@;;;.
+     '';@@@@@,.  ,   .   ',;;;@@@@@@;;;;;;
+        .   '';;;;;;;;;,;;;;@@@@@;;' ,.:;'
+          ''..,,     ''''    '  .,;'
+               ''''''::''''''''
+    """
+    print(eye)
+    from pyfiglet import Figlet
+    f = Figlet(font='slant')
+    print(f.renderText('SLY  EYE'))
+    
 def main(args):
     es, _ = start_elastic()
 
@@ -30,6 +49,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--no-logo", action="store_true", help="Hide the logo on startup")
 
     args = parser.parse_args()
 
@@ -43,6 +63,9 @@ if __name__ == "__main__":
         level = logging.CRITICAL + 10 #  turns off logging
 
     coloredlogs.install(level=level, logger=logger, fmt="%(asctime)s [%(levelname)s] %(message)s")
+
+    if not args.no_logo:
+        display_logo()
 
     logger.debug("Starting sly-eye")
     main(args)
