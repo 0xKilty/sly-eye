@@ -8,7 +8,7 @@ from src.scanning.trufflehog import run_trufflehog
 from src.storing.elastic import start_elastic
 
 def display_logo():
-    eye = r"""
+    logo = r"""
           ..,,;;;;;;,,,,
        .,;'';;,..,;;;,,,,,.''';;,..
     ,,''                    '';;;;,;''
@@ -20,11 +20,14 @@ def display_logo():
         .   '';;;;;;;;;,;;;;@@@@@;;' ,.:;'
           ''..,,     ''''    '  .,;'
                ''''''::''''''''
+               
+       _____ ____  __     ________  ________
+      / ___// /\ \/ /    / ____/\ \/ / ____/
+      \__ \/ /  \  /    / __/    \  / __/   
+     ___/ / /___/ /    / /___    / / /___   
+    /____/_____/_/    /_____/   /_/_____/ 
     """
-    print(eye)
-    from pyfiglet import Figlet
-    f = Figlet(font='slant')
-    print(f.renderText('SLY  EYE'))
+    print(logo)
     
 def main(args):
     es, _ = start_elastic()
@@ -50,6 +53,7 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--no-logo", action="store_true", help="Hide the logo on startup")
+    parser.add_argument("--kibana", action="store_true", help="Starts Kibana automatically")
 
     args = parser.parse_args()
 

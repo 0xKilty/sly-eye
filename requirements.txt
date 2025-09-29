@@ -1,4 +1,4 @@
 coloredlogs
 docker
-elasticsearch
+elasticsearch==8.18.1
 pyfiglet
