@@ -4,8 +4,9 @@ import argparse
 from elasticsearch import helpers
 
 from src.sourcing.dockerhub import dockerhub_source
-from src.scanning.trufflehog import run_trufflehog
+from src.scanning.trufflehog import TruffleHog
 from src.storing.elastic import start_elastic
+from src.searching.kibana import start_kibana
 
 def display_logo():
     logo = r"""
@@ -31,12 +32,16 @@ def display_logo():
     
 def main(args):
     es, _ = start_elastic()
+    if args.kibana:
+        start_kibana()
 
     recent_docker_images = dockerhub_source()
     results = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
     
+    trufflehog = TruffleHog()
+    
     for image in results:
-        trufflehog_results = run_trufflehog(image["id"])
+        trufflehog_results = trufflehog.run_trufflehog(image["id"])
 
         logger.debug(f"Adding {len(trufflehog_results)} results into elastic")
         actions = [

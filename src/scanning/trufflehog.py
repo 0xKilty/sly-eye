@@ -3,19 +3,38 @@ import json
 import logging
 logger = logging.getLogger("sly-eye")
 
-def run_trufflehog(image):
-    client = docker.from_env()
+class TruffleHog:
+    def __init__(self):
+        self.client = docker.from_env()  
+        self.trufflehog_image = "trufflesecurity/trufflehog:latest"
+        
+        try:
+            self.client.images.get(self.trufflehog_image)
+        except docker.errors.ImageNotFound:
+            logger.debug(f"Pulling image: {self.trufflehog_image}")
+            self.client.images.pull(self.trufflehog_image)
 
-    trufflehog_image = "trufflesecurity/trufflehog:latest"
-    logger.debug(f"Pulling image: {trufflehog_image}")
-    client.images.pull(trufflehog_image)
+    def run_trufflehog(self, image):
+        logger.debug("Starting trufflehog container")
 
-    logger.debug("Starting trufflehog container")
+        params = f"docker --image {image} --json"
+        logger.debug(f"Running: trufflehog {params}")
 
-    params = f"docker --image {image} --json"
-    logger.debug(f"Running: trufflehog {params}")
-    container = client.containers.run(trufflehog_image, params.split(" "), remove=True)
+        logs = self.client.containers.run(
+            self.trufflehog_image,
+            params.split(" "),
+            remove=True,
+            stdout=True,
+            stderr=True,
+            stream=True,
+            volumes={"/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"}},
+        )
 
-    logger.debug("Stopping trufflehog container")
-    ret =  [json.loads(line) for line in container.decode().splitlines()]
-    return ret
+        results = []
+        for line in logs:
+            try:
+                results.append(json.loads(line.decode()))
+            except json.JSONDecodeError:
+                pass
+
+        return results
