@@ -4,23 +4,24 @@ import argparse
 from elasticsearch import helpers
 
 from src.sourcing.dockerhub import dockerhub_source
-from src.scanning.trufflehog import TruffleHog
+from src.scanning.trufflehog import run_trufflehog
 from src.storing.elastic import start_elastic
 from src.searching.kibana import start_kibana
+from src.scheduling.scheduling import BoundedExecutor
 
 def display_logo():
     logo = r"""
-          ..,,;;;;;;,,,,
-       .,;'';;,..,;;;,,,,,.''';;,..
-    ,,''                    '';;;;,;''
-   ;'    ,;@@;'  ,@@;, @@, ';;;@@;,;';.
-  ''  ,;@@@@@'  ;@@@@; ''    ;;@@@@@;;;;
-     ;;@@@@@;    '''     .,,;;;@@@@@@@;;;
-    ;;@@@@@@;           , ';;;@@@@@@@@;;;.
-     '';@@@@@,.  ,   .   ',;;;@@@@@@;;;;;;
-        .   '';;;;;;;;;,;;;;@@@@@;;' ,.:;'
-          ''..,,     ''''    '  .,;'
-               ''''''::''''''''
+            ..,,;;;;;;,,,,
+        .,;'';;,..,;;;,,,,,.''';;,..
+        ,,''                    '';;;;,;''
+    ;'    ,;@@;'  ,@@;, @@, ';;;@@;,;';.
+    ''  ,;@@@@@'  ;@@@@; ''    ;;@@@@@;;;;
+        ;;@@@@@;    '''     .,,;;;@@@@@@@;;;
+        ;;@@@@@@;           , ';;;@@@@@@@@;;;.
+        '';@@@@@,.  ,   .   ',;;;@@@@@@;;;;;;
+            .   '';;;;;;;;;,;;;;@@@@@;;' ,.:;'
+            ''..,,     ''''    '  .,;'
+                ''''''::''''''''
                
        _____ ____  __     ________  ________
       / ___// /\ \/ /    / ____/\ \/ / ____/
@@ -32,25 +33,35 @@ def display_logo():
     
 def main(args):
     es, _ = start_elastic()
-    if args.kibana:
+    if args.only_kibana:
+        start_kibana()
+        return
+    elif args.kibana:
         start_kibana()
 
     recent_docker_images = dockerhub_source()
     results = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
     
-    trufflehog = TruffleHog()
+    executor = BoundedExecutor()
+
+    def run_trufflehog_insert_results(image):
+        try:
+            trufflehog_results = run_trufflehog(image)
+            logger.debug(f"Adding {len(trufflehog_results)} results from {image} into elastic")
+            actions = [
+                {"_index": "trufflehog-findings", "_source": result}
+                for result in trufflehog_results
+            ]
+            helpers.bulk(es, actions)
+        except Exception as e:
+            logger.exception(f"Trufflehog scan failed for {image}: {e}")
     
     for image in results:
-        trufflehog_results = trufflehog.run_trufflehog(image["id"])
+        logger.debug(f"Submitting scan on {image['id']}")
+        executor.submit(run_trufflehog_insert_results, image["id"])
 
-        logger.debug(f"Adding {len(trufflehog_results)} results into elastic")
-        actions = [
-            {"_index": "trufflehog-findings", "_source": result}
-            for result in trufflehog_results
-        ]
-
-        helpers.bulk(es, actions)
-
+    logger.debug("Waiting for all threads to finish")
+    executor.shutdown(wait=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A package scanner")
@@ -59,6 +70,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--no-logo", action="store_true", help="Hide the logo on startup")
     parser.add_argument("--kibana", action="store_true", help="Starts Kibana automatically")
+    parser.add_argument("--only-kibana", action="store_true", help="Starts Kibana automatically")
 
     args = parser.parse_args()
 

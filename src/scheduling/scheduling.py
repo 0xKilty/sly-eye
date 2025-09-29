@@ -1,34 +1,24 @@
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 logger = logging.getLogger("sly-eye")
 
-class Scheduler:
+class BoundedExecutor:
     def __init__(self):
-        self.cores = os.cpu_count() or 4
-        self.max_workers = min(32, self.cores * 2)
+        self._cores = os.cpu_count() or 4
+        self._max_workers = min(32, self._cores + (self._cores // 2))
 
-def bulk_scan(function, images, max_workers=4):
-    results = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(function, img): img for img in images}
-        for future in as_completed(futures):
-            img = futures[future]
-            try:
-                _, scan_results = future.result()
-                results[img] = scan_results
-                logger.info(f"Finished scanning {img} ({len(scan_results)} findings)")
-            except Exception as e:
-                logger.error(f"Error scanning {img}: {e}")
-                results[img] = []
-    return results
+        self._executor = ThreadPoolExecutor(max_workers=self._cores)
+        self._queue = threading.Semaphore(self._cores)
 
+    def submit(self, fn, *args, **kwargs):
+        self._queue.acquire()
+        future = self._executor.submit(fn, *args, **kwargs)
+        future.add_done_callback(lambda f: self._queue.release())
+        return future
 
-'''
+    def shutdown(self, wait=True):
+        self._executor.shutdown(wait)
 
-scheduler = Scheduler()
-
-scheduler.dispatch(run_trufflehog, images)
-
-'''
