@@ -30,6 +30,24 @@ def display_logo():
     /____/_____/_/    /_____/   /_/_____/ 
     """
     print(logo)
+
+def collect_trufflehog_results(image):
+    try:
+        logger.debug(f"Running Trufflehog on {image}")
+        trufflehog = TruffleHog()
+        return trufflehog.run_trufflehog(image)
+    except Exception as e:
+        logger.debug(f"Trufflehog scan failed for {image}: {e}")
+        return []
+    
+def start_processes(results, executor):
+    futures = []
+    for image in results:
+        image_id = image["id"]
+        logger.debug(f"Submitting scan on {image_id}")
+        future = executor.submit(collect_trufflehog_results, image_id)
+        futures.append((image_id, future))
+    return futures
     
 def main(args):
     es, _ = start_elastic()
@@ -41,34 +59,36 @@ def main(args):
 
     recent_docker_images = dockerhub_source()
     results = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
-    
-    trufflehog = TruffleHog()
+        
     executor = BoundedProcessPool()
+    futures = start_processes(results, executor)
+    
+    logger.debug("Waiting for all workers to finish")
+    try:
+        for image_id, future in futures:
+            try:
+                trufflehog_results = future.result()
+            except Exception as exc:
+                logger.debug(f"Trufflehog scan failed for {image_id}: {exc}")
+                continue
 
-    def run_trufflehog_insert_results(image):
-        try:
-            trufflehog_results = trufflehog.run_trufflehog(image)
-            logger.debug(f"Adding {len(trufflehog_results)} results from {image} into elastic")
+            if not trufflehog_results:
+                continue
+
+            logger.debug(f"Adding {len(trufflehog_results)} results from {image_id} into elastic")
             actions = [
                 {"_index": "trufflehog-findings", "_source": result}
                 for result in trufflehog_results
             ]
             helpers.bulk(es, actions)
-        except Exception as e:
-            logger.exception(f"Trufflehog scan failed for {image}: {e}")
-    
-    for image in results:
-        logger.debug(f"Submitting scan on {image['id']}")
-        executor.submit(run_trufflehog_insert_results, image["id"])
+    finally:
+        executor.shutdown(wait=True)
 
-    logger.debug("Waiting for all threads to finish")
-    executor.shutdown(wait=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A package scanner")
 
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode")
-    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--no-logo", action="store_true", help="Hide the logo on startup")
     parser.add_argument("--kibana", action="store_true", help="Starts Kibana automatically")
     parser.add_argument("--only-kibana", action="store_true", help="Starts Kibana automatically")
