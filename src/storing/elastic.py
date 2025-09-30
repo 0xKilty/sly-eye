@@ -19,14 +19,17 @@ def start_elastic():
     start_elastic_network(client)
 
     image = "docker.elastic.co/elasticsearch/elasticsearch:8.15.3"
-    logger.debug(f"Pulling image: {image}")
-    client.images.pull(image)
+    try:
+        client.images.get(image)
+    except docker.errors.ImageNotFound:
+        logger.debug(f"Pulling image: {image}")
+        client.images.pull(image)
 
     vol_name = "esdata"
-    logger.debug(f"Getting/creating volume: {vol_name}")
     try:
         client.volumes.get(vol_name)
     except docker.errors.NotFound:
+        logger.debug(f"Creating volume: {vol_name}")
         client.volumes.create(name=vol_name)
 
     try:

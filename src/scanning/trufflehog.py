@@ -28,7 +28,7 @@ class TruffleHog:
             stdout=True,
             stderr=True,
             stream=True,
-            volumes={"/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"}},
+            environment={"TRUFFLEHOG_NO_UPDATE": "true"},
         )
 
         results = []

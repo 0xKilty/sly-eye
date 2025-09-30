@@ -8,10 +8,10 @@ logger = logging.getLogger("sly-eye")
 class BoundedExecutor:
     def __init__(self):
         self._cores = os.cpu_count() or 4
-        self._max_workers = min(32, self._cores + (self._cores // 2))
+        self._max_workers = 3
 
-        self._executor = ThreadPoolExecutor(max_workers=self._cores)
-        self._queue = threading.Semaphore(self._cores)
+        self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+        self._queue = threading.Semaphore(self._max_workers)
 
     def submit(self, fn, *args, **kwargs):
         self._queue.acquire()

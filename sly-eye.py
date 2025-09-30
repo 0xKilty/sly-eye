@@ -4,7 +4,7 @@ import argparse
 from elasticsearch import helpers
 
 from src.sourcing.dockerhub import dockerhub_source
-from src.scanning.trufflehog import run_trufflehog
+from src.scanning.trufflehog import TruffleHog
 from src.storing.elastic import start_elastic
 from src.searching.kibana import start_kibana
 from src.scheduling.scheduling import BoundedExecutor
@@ -42,11 +42,12 @@ def main(args):
     recent_docker_images = dockerhub_source()
     results = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
     
+    trufflehog = TruffleHog()
     executor = BoundedExecutor()
 
     def run_trufflehog_insert_results(image):
         try:
-            trufflehog_results = run_trufflehog(image)
+            trufflehog_results = trufflehog.run_trufflehog(image)
             logger.debug(f"Adding {len(trufflehog_results)} results from {image} into elastic")
             actions = [
                 {"_index": "trufflehog-findings", "_source": result}
@@ -81,7 +82,7 @@ if __name__ == "__main__":
     elif args.verbose:
         level = logging.INFO
     else:
-        level = logging.CRITICAL + 10 #  turns off logging
+        level = logging.CRITICAL + 10
 
     coloredlogs.install(level=level, logger=logger, fmt="%(asctime)s [%(levelname)s] %(message)s")
 
