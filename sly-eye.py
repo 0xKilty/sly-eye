@@ -7,7 +7,7 @@ from src.sourcing.dockerhub import dockerhub_source
 from src.scanning.trufflehog import TruffleHog
 from src.storing.elastic import start_elastic
 from src.searching.kibana import start_kibana
-from src.scheduling.scheduling import BoundedExecutor
+from src.scheduling.scheduling import BoundedProcessPool
 
 def display_logo():
     logo = r"""
@@ -43,7 +43,7 @@ def main(args):
     results = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
     
     trufflehog = TruffleHog()
-    executor = BoundedExecutor()
+    executor = BoundedProcessPool()
 
     def run_trufflehog_insert_results(image):
         try:
