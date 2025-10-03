@@ -1,6 +1,7 @@
 import logging
 import coloredlogs
 import argparse
+import os
 from elasticsearch import helpers
 from concurrent.futures import as_completed, ProcessPoolExecutor
 
@@ -67,7 +68,8 @@ def main(args):
     recent_docker_images = dockerhub_source()
     results = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
         
-    executor = ProcessPoolExecutor(max_workers=3)
+    cores = os.cpu_count() or 4
+    executor = ProcessPoolExecutor(max_workers=cores)
     futures = start_processes(results, executor)
     
     logger.debug("Waiting for all workers to finish")
@@ -76,8 +78,8 @@ def main(args):
             image = futures[future]
             try:
                 trufflehog_results = future.result()
-            except Exception as exc:
-                logger.debug(f"Trufflehog scan failed for {image}: {exc}")
+            except Exception as e:
+                logger.debug(f"Trufflehog scan failed for {image}: {e}")
                 continue
 
             if not trufflehog_results:

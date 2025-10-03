@@ -1,6 +1,5 @@
 import docker
 import json
-import subprocess
 import logging
 logger = logging.getLogger("sly-eye")
 
@@ -39,33 +38,3 @@ class TruffleHog:
                 pass
 
         return results
-    
-def run_trufflehog(image):
-    command = f"trufflehog docker --image {image} --json"
-
-    logger.debug(f"Running: {command}")
-
-    process = subprocess.Popen(
-        command.split(" "),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        bufsize=1
-    )
-
-    process.wait()
-
-    results = []
-    for line in process.stdout:
-        try:
-            results.append(json.loads(line))
-        except json.JSONDecodeError:
-            logger.debug(f"Non-JSON line: {line.strip()}")
-
-    stderr = process.stderr.read()
-    if stderr:
-        logger.warning(f"Trufflehog stderr: {stderr}")
-
-    return results
