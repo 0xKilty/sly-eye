@@ -9,7 +9,6 @@ from src.sourcing.dockerhub import dockerhub_source
 from src.scanning.trufflehog import TruffleHog
 from src.storing.elastic import start_elastic
 from src.searching.kibana import start_kibana
-from src.scheduling.scheduling import BoundedProcessPool
 
 def display_logo():
     logo = r"""
