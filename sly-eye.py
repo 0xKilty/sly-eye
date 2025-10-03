@@ -48,6 +48,14 @@ def start_processes(results, executor):
         future = executor.submit(collect_trufflehog_results, image_id)
         futures.append((image_id, future))
     return futures
+
+def insert_results(results, image_id, es, index):
+    logger.debug(f"Adding {len(results)} results from {image_id} into elastic")
+    actions = [
+        {"_index": index, "_source": result}
+        for result in results
+    ]
+    helpers.bulk(es, actions)
     
 def main(args):
     es, _ = start_elastic()
@@ -75,12 +83,7 @@ def main(args):
             if not trufflehog_results:
                 continue
 
-            logger.debug(f"Adding {len(trufflehog_results)} results from {image_id} into elastic")
-            actions = [
-                {"_index": "trufflehog-findings", "_source": result}
-                for result in trufflehog_results
-            ]
-            helpers.bulk(es, actions)
+            insert_results(trufflehog_results, image_id, es, "trufflehog-findings")
     finally:
         executor.shutdown(wait=True)
 
