@@ -34,7 +34,7 @@ def start_elastic():
 
     try:
         old = client.containers.get(ELASTIC_CONTAINER_NAME)
-        logger.debug("Removing existing container")
+        logger.debug("Removing existing elastic container")
         old.remove(force=True)
     except:
         pass

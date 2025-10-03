@@ -2,6 +2,7 @@ import logging
 import coloredlogs
 import argparse
 from elasticsearch import helpers
+from concurrent.futures import as_completed, ProcessPoolExecutor
 
 from src.sourcing.dockerhub import dockerhub_source
 from src.scanning.trufflehog import TruffleHog
@@ -33,20 +34,18 @@ def display_logo():
 
 def collect_trufflehog_results(image):
     try:
-        logger.debug(f"Running Trufflehog on {image}")
         trufflehog = TruffleHog()
         return trufflehog.run_trufflehog(image)
-    except Exception as e:
-        logger.debug(f"Trufflehog scan failed for {image}: {e}")
+    except Exception:
         return []
     
 def start_processes(results, executor):
-    futures = []
+    futures = {}
     for image in results:
         image_id = image["id"]
         logger.debug(f"Submitting scan on {image_id}")
         future = executor.submit(collect_trufflehog_results, image_id)
-        futures.append((image_id, future))
+        futures[future] = image_id
     return futures
 
 def insert_results(results, image_id, es, index):
@@ -68,22 +67,23 @@ def main(args):
     recent_docker_images = dockerhub_source()
     results = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
         
-    executor = BoundedProcessPool()
+    executor = ProcessPoolExecutor(max_workers=3)
     futures = start_processes(results, executor)
     
     logger.debug("Waiting for all workers to finish")
     try:
-        for image_id, future in futures:
+        for future in as_completed(list(futures.keys())):
+            image = futures[future]
             try:
                 trufflehog_results = future.result()
             except Exception as exc:
-                logger.debug(f"Trufflehog scan failed for {image_id}: {exc}")
+                logger.debug(f"Trufflehog scan failed for {image}: {exc}")
                 continue
 
             if not trufflehog_results:
                 continue
 
-            insert_results(trufflehog_results, image_id, es, "trufflehog-findings")
+            insert_results(trufflehog_results, image, es, "trufflehog-findings")
     finally:
         executor.shutdown(wait=True)
 
@@ -102,8 +102,6 @@ if __name__ == "__main__":
 
     if args.debug:
         level = logging.DEBUG
-    elif args.verbose:
-        level = logging.INFO
     else:
         level = logging.CRITICAL + 10
 
