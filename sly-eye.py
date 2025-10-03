@@ -51,11 +51,16 @@ def start_processes(results, executor):
 
 def insert_results(results, image_id, es, index):
     logger.debug(f"Adding {len(results)} results from {image_id} into elastic")
+    if not results:
+        return
     actions = [
         {"_index": index, "_source": result}
         for result in results
     ]
-    helpers.bulk(es, actions)
+    try:
+        helpers.bulk(es, actions, chunk_size=100)
+    except Exception as e:
+        logger.error(f"Failed to insert results for {image_id}: {e}")
     
 def main(args):
     es, _ = start_elastic()
