@@ -1,13 +1,13 @@
 import logging
 import coloredlogs
 import argparse
-import os
 from elasticsearch import helpers
 from concurrent.futures import as_completed, ProcessPoolExecutor
 
 from src.sourcing.dockerhub import dockerhub_source
+from src.sourcing.pypi import pypi_source
 from src.scanning.trufflehog import TruffleHog
-from src.storing.elastic import start_elastic
+from src.storing.elastic import start_elastic, stop_elastic
 from src.searching.kibana import start_kibana
 
 def display_logo():
@@ -38,7 +38,19 @@ def collect_trufflehog_results(image):
         return trufflehog.run_trufflehog(image)
     except Exception:
         return []
-    
+
+def collect_pypi_results(package):
+    return [package]
+
+def start_processes3(targets, executor, collector):
+    futures = {}
+    for target in targets:
+        logger.debug(f"Submitting {collector.__name__}({target!r})")
+        future = executor.submit(collector, target)
+        futures[future] = target
+    return futures
+
+
 def start_processes(results, executor):
     futures = {}
     for image in results:
@@ -62,46 +74,64 @@ def insert_results(results, image_id, es, index):
         logger.error(f"Failed to insert results for {image_id}: {e}")
     
 def main(args):
-    es, _ = start_elastic()
+    es, container = start_elastic()
     if args.only_kibana:
         start_kibana()
         return
     elif args.kibana:
         start_kibana()
 
-    recent_docker_images = dockerhub_source()
-    results = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
-        
-    cores = os.cpu_count() or 4
-    executor = ProcessPoolExecutor(max_workers=cores)
-    futures = start_processes(results, executor)
-    
+    max_workers = max(1, args.max_workers)
+    executor = ProcessPoolExecutor(max_workers=max_workers)
+    logger.debug(f"Process pool initialized with max_workers={max_workers}")
+
+    if args.command == "docker":
+        recent_docker_images = dockerhub_source()
+        images_info = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
+        image_names = [image["id"] for image in images_info]
+        futures = start_processes3(image_names, executor, collect_trufflehog_results)
+    elif args.command == "pypi":
+        recent_pypi_packages = pypi_source()
+        package_links = [entry.link for entry in recent_pypi_packages]
+        futures = start_processes3(package_links, executor, collect_pypi_results)
+    else:
+        raise ValueError(f"Invalid command type: {args.command}") # should never happen but just in case of a bit flip
+
     logger.debug("Waiting for all workers to finish")
     try:
         for future in as_completed(list(futures.keys())):
-            image = futures[future]
+            target = futures[future]
             try:
-                trufflehog_results = future.result()
+                results = future.result()
             except Exception as e:
-                logger.debug(f"Trufflehog scan failed for {image}: {e}")
+                logger.debug(f"Scan failed for {target}: {e}")
                 continue
 
-            if not trufflehog_results:
+            if not results:
                 continue
 
-            insert_results(trufflehog_results, image, es, "trufflehog-findings")
+            insert_results(results, target, es, f"{args.command}-findings")
     finally:
         executor.shutdown(wait=True)
+        stop_elastic(container)
+        logger.debug("Cleaned up and exiting.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="A package scanner")
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
+    common.add_argument("--no-logo", action="store_true", help="Hide the logo on startup")
+    common.add_argument("--kibana", action="store_true", help="Starts Kibana automatically")
+    common.add_argument("--only-kibana", action="store_true", help="Starts Kibana automatically")
+    common.add_argument("--max-workers", type=int, default=4, help="Limit concurrent scans (default: 4)")
 
-    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
-    parser.add_argument("--no-logo", action="store_true", help="Hide the logo on startup")
-    parser.add_argument("--kibana", action="store_true", help="Starts Kibana automatically")
-    parser.add_argument("--only-kibana", action="store_true", help="Starts Kibana automatically")
+    parser = argparse.ArgumentParser(description="A package scanner", parents=[common])
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
+    docker_parser = subparsers.add_parser("docker", parents=[common], help="Scan Docker images")
+    pypi_parser = subparsers.add_parser("pypi", parents=[common], help="Scan PyPI packages")
+
+    args, unknown = parser.parse_known_args()
     args = parser.parse_args()
 
     logger = logging.getLogger("sly-eye")

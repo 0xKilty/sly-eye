@@ -1,3 +1,4 @@
 coloredlogs
 docker
 elasticsearch==8.18.1
+feedparser

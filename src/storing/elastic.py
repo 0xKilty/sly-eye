@@ -72,3 +72,11 @@ def start_elastic():
             time.sleep(1)
 
     raise RuntimeError("Elasticsearch did not become ready in time")
+
+def stop_elastic(container):
+    try:
+        logger.debug(f"Stopping Elasticsearch container: {container.name}")
+        container.stop(timeout=10)
+        container.remove(force=True)
+    except Exception as e:
+        logger.warning(f"Failed to stop container cleanly: {e}")
