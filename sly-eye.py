@@ -1,13 +1,18 @@
 import logging
 import coloredlogs
 import argparse
+import os
 from elasticsearch import helpers
 from concurrent.futures import as_completed, ProcessPoolExecutor
 
 from src.sourcing.dockerhub import dockerhub_source
-from src.sourcing.pypi import pypi_source
+from src.sourcing.pypi import pypi_source, download_pypi_package
+
 from src.scanning.trufflehog import TruffleHog
+from src.scanning.semgrep import run_semgrep_on_wheel
+
 from src.storing.elastic import start_elastic, stop_elastic
+
 from src.searching.kibana import start_kibana
 
 def display_logo():
@@ -40,24 +45,19 @@ def collect_trufflehog_results(image):
         return []
 
 def collect_pypi_results(package):
-    return [package]
+    file_path = download_pypi_package(package)
+    semgrep_results = run_semgrep_on_wheel(file_path)
+    # guarddog_results = run_guarddog_on_tarball(file_path)
 
-def start_processes3(targets, executor, collector):
+    os.remove(file_path)
+    return semgrep_results# , guarddog_results
+
+def start_processes(targets, executor, collector):
     futures = {}
     for target in targets:
         logger.debug(f"Submitting {collector.__name__}({target!r})")
         future = executor.submit(collector, target)
         futures[future] = target
-    return futures
-
-
-def start_processes(results, executor):
-    futures = {}
-    for image in results:
-        image_id = image["id"]
-        logger.debug(f"Submitting scan on {image_id}")
-        future = executor.submit(collect_trufflehog_results, image_id)
-        futures[future] = image_id
     return futures
 
 def insert_results(results, image_id, es, index):
@@ -89,11 +89,15 @@ def main(args):
         recent_docker_images = dockerhub_source()
         images_info = recent_docker_images["routes/_layout.search"]["data"]["searchResults"]["results"]
         image_names = [image["id"] for image in images_info]
-        futures = start_processes3(image_names, executor, collect_trufflehog_results)
+        futures = start_processes(image_names, executor, collect_trufflehog_results)
     elif args.command == "pypi":
         recent_pypi_packages = pypi_source()
-        package_links = [entry.link for entry in recent_pypi_packages]
-        futures = start_processes3(package_links, executor, collect_pypi_results)
+        packages = [entry.link for entry in recent_pypi_packages]
+        for package in packages:
+            results = collect_pypi_results(package)
+            print(results)
+        return
+        # futures = start_processes(packages, executor, collect_pypi_results)
     else:
         raise ValueError(f"Invalid command type: {args.command}") # should never happen but just in case of a bit flip
 

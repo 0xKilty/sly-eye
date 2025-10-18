@@ -1,27 +1,22 @@
-import tarfile
-import tempfile
 import subprocess
+import tempfile
 import json
+import zipfile
 import shutil
 
-def run_semgrep_on_tarball(tar_path, rules="auto"):
+def run_semgrep_on_wheel(tar_path, rules="auto"):
     tmpdir = tempfile.mkdtemp()
     try:
-        with tarfile.open(tar_path, "r:gz") as tar:
-            tar.extractall(tmpdir)
-
+        with zipfile.ZipFile(tar_path, "r") as zipf:
+            zipf.extractall(tmpdir)
         proc = subprocess.run(
             ["semgrep", "scan", tmpdir, "--config", rules, "--json", "--quiet"],
             capture_output=True,
             text=True,
             check=False
         )
-
         return json.loads(proc.stdout)
     except json.JSONDecodeError:
         return None
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
-
-results = run_semgrep_on_tarball("django_ghost-0.3.0.tar.gz")
-print(results)

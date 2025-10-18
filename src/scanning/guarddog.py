@@ -1,10 +1,10 @@
-import tarfile
-import tempfile
 import subprocess
+import tempfile
 import json
+import tarfile
 import shutil
 
-def run_semgrep_on_tarball(tar_path, rules="auto"):
+def run_guarddog_on_tarball(tar_path, rules="auto"):
     tmpdir = tempfile.mkdtemp()
     try:
         with tarfile.open(tar_path, "r:gz") as tar:
@@ -22,6 +22,3 @@ def run_semgrep_on_tarball(tar_path, rules="auto"):
         return None
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
-
-results = run_semgrep_on_tarball("django_ghost-0.3.0.tar.gz")
-print(results)
